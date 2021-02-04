@@ -27,6 +27,8 @@ metadata:
   name: <remote_resource_s3_name>
   namespace: <namespace>
 spec:
+  clusterAuth:
+    impersonateUser: razeedeploy
   auth:
     # hmac:
     #   accessKeyId: <key id>
@@ -67,6 +69,9 @@ spec:
   type: object
   required: [requests]
   properties:
+    clusterAuth:
+      type: object
+      ...
     auth:
       type: object
       ...
@@ -74,6 +79,37 @@ spec:
       type: array
       ...
 ```
+
+### User Impersonation
+
+**Path:** `.spec.clusterAuth.impersonateUser`
+
+**Description:** Impersonates a user for the given resource. This includes all
+actions the controller must make related to the resource (fetching envs, getting
+resources, applying resources, etc.). The RazeeDeploy resource must be created in
+the razeedeploy namespace in order to use impersonateUser, all other namespaces
+will ignore impersonateUser and default to the razeedeploy user (eg. no user impersonation).
+ImpersonateUser only applies to the single RazeeDeploy resource that it has been
+added to.
+
+**Note:**: If cluster owners want to prevent users, with direct cluster access, from
+using user-impersonation, they should prevent those users from creating RazeeDeploy
+resources in the razeedeploy namespace. In the future we will have an Admission
+Controller that should improve security and eliminate the need for the razeedeploy
+namespace scoping. [razeedeploy-core #189](https://github.com/razee-io/razeedeploy-core/issues/189)
+
+**Schema:**
+
+```yaml
+properties:
+  clusterAuth:
+    type: object
+    properties:
+      impersonateUser:
+        type: string
+```
+
+**Default:** `'razeedeploy'`
 
 ### Auth: HMAC
 

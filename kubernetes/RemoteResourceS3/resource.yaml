@@ -123,6 +123,11 @@ items:
                   type: object
                   required: [requests]
                   properties:
+                    clusterAuth:
+                      type: object
+                      properties:
+                        impersonateUser:
+                          type: string
                     auth:
                       type: object
                       oneOf:

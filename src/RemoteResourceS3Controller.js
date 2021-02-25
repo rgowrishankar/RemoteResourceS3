@@ -88,6 +88,10 @@ module.exports = class RemoteResourceS3Controller extends BaseDownloadController
       this.log.error(`Download failed: ${objectListResponse.statusCode} | ${url}`);
       return Promise.reject({ statusCode: objectListResponse.statusCode, uri: url });
     }
+    if (result.length === 0) {
+      this.log.error(`Error getting resources for ${url}, no resources found.`);
+      return Promise.reject({ statusCode: 404, uri: url, message: `Error getting resources for ${url}, no resources found.` });
+    }
     return result;
   }
 

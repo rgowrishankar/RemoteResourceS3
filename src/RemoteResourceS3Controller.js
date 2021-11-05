@@ -16,6 +16,9 @@
 
 const objectPath = require('object-path');
 const request = require('request-promise-native');
+const fs = require('fs-extra');
+const hash = require('object-hash');
+const axios = require('axios');
 const merge = require('deepmerge');
 const xml2js = require('xml2js');
 const clone = require('clone');
@@ -29,6 +32,48 @@ module.exports = class RemoteResourceS3Controller extends BaseDownloadController
     params.logger = params.logger || loggerFactory.createLogger('RemoteResourceS3Controller');
     super(params);
   }
+  // ============ Download From Bucket ============
+
+  async added() {
+    let requests = objectPath.get(this.data, ['object', 'spec', 'requests'], []);
+    let newRequests = [];
+    for (let i = 0; i < requests.length; i++) {
+      let r = requests[i];
+      const url = new URL(objectPath.get(r, 'options.url'));
+      if (url.pathname.endsWith('/')) { //This is an S3 bucket
+        let additionalRequests = await this._getBucketObjectRequestList(r);
+        newRequests = newRequests.concat(additionalRequests);
+      } else {
+        newRequests.push(r);
+      }
+    }
+    objectPath.set(this.data, ['object', 'spec', 'requests'], newRequests);
+    let result = await super.added();
+    return result;
+  }
+
+  async download(reqOpt) {
+    let hmac = objectPath.get(this.data, ['object', 'spec', 'auth', 'hmac']);
+    let iam = objectPath.get(this.data, ['object', 'spec', 'auth', 'iam']);
+    let options = {};
+    if (hmac) {
+      let { accessKeyId, secretAccessKey } = await this._fetchHmacSecrets(hmac);
+      objectPath.set(options, 'aws.key', accessKeyId);
+      objectPath.set(options, 'aws.secret', secretAccessKey);
+    } else if (iam) {
+      let bearerToken = await this._fetchS3Token(iam);
+      objectPath.set(options, 'headers.Authorization', `bearer ${bearerToken}`);
+    }
+    let opt = merge(reqOpt, options);
+    this.log.debug(`Download ${opt.uri || opt.url}`);
+
+    opt.simple = false;
+    opt.resolveWithFullResponse = true;
+
+    return await request(opt);
+  }
+
+  // ============ Bucket Specific Syntax ============
 
   async _fixUrl(url) {
     const u = new URL(url);
@@ -95,44 +140,7 @@ module.exports = class RemoteResourceS3Controller extends BaseDownloadController
     return result;
   }
 
-  async added() {
-    let requests = objectPath.get(this.data, ['object', 'spec', 'requests'], []);
-    let newRequests = [];
-    for (let i = 0; i < requests.length; i++) {
-      let r = requests[i];
-      const url = new URL(objectPath.get(r, 'options.url'));
-      if (url.pathname.endsWith('/')) { //This is an S3 bucket
-        let additionalRequests = await this._getBucketObjectRequestList(r);
-        newRequests = newRequests.concat(additionalRequests);
-      } else {
-        newRequests.push(r);
-      }
-    }
-    objectPath.set(this.data, ['object', 'spec', 'requests'], newRequests);
-    let result = await super.added();
-    return result;
-  }
-
-  async download(reqOpt) {
-    let hmac = objectPath.get(this.data, ['object', 'spec', 'auth', 'hmac']);
-    let iam = objectPath.get(this.data, ['object', 'spec', 'auth', 'iam']);
-    let options = {};
-    if (hmac) {
-      let { accessKeyId, secretAccessKey } = await this._fetchHmacSecrets(hmac);
-      objectPath.set(options, 'aws.key', accessKeyId);
-      objectPath.set(options, 'aws.secret', secretAccessKey);
-    } else if (iam) {
-      let bearerToken = await this._fetchS3Token(iam);
-      objectPath.set(options, 'headers.Authorization', `bearer ${bearerToken}`);
-    }
-    let opt = merge(reqOpt, options);
-    this.log.debug(`Download ${opt.uri || opt.url}`);
-
-    opt.simple = false;
-    opt.resolveWithFullResponse = true;
-
-    return await request(opt);
-  }
+  // ============ Fetch Secrets ============
 
   async _fetchHmacSecrets(hmac) {
     let akid;
@@ -211,17 +219,61 @@ module.exports = class RemoteResourceS3Controller extends BaseDownloadController
       return Promise.reject('Failed to find valid apikey to authenticate against iam');
     }
 
-    let res = await request.post({
-      form: {
-        apikey: apiKey,
-        response_type: iam.responseType || iam.response_type,
-        grant_type: iam.grantType || iam.grant_type
-      },
-      timeout: 60000,
-      url: iam.url,
-      json: true
-    });
+    let res = await this._requestToken(iam, apiKey);
     return res.access_token;
+  }
+
+
+  async _requestToken(iam, apiKey) {
+    let token;
+    if (this.s3TokenCache === undefined) {
+      this.s3TokenCache = {};
+    }
+    const apiKeyHash = hash(apiKey, { algorithm: 'shake256' });
+    let tokenCacheFile = `./download-cache/s3token-cache/${apiKeyHash}.json`;
+    if (token === undefined && await fs.pathExists(tokenCacheFile)) {
+      // fetch cached token
+      if (objectPath.has(this.s3TokenCache, [apiKeyHash])) {
+        token = objectPath.get(this.s3TokenCache, [apiKeyHash]);
+      } else if (await fs.pathExists(tokenCacheFile)) {
+        token = await fs.readJson(tokenCacheFile);
+        objectPath.set(this.s3TokenCache, [apiKeyHash], token);
+      }
+    }
+    if (token !== undefined) {
+      const expires = objectPath.get(token, 'expiration', 0); // expiration: time since epoch in seconds
+      // re-use cached token as long as we are more than 2 minutes away from expiring.
+      if (Date.now() < (expires - 120) * 1000) {
+        return token;
+      }
+    }
+
+    try {
+      let res = await axios({
+        method: 'post',
+        url: iam.url, // 'https://iam.cloud.ibm.com/identity/token',
+        params: {
+          'grant_type': iam.grantType || iam.grant_type, // 'urn:ibm:params:oauth:grant-type:apikey',
+          'apikey': apiKey
+        },
+        // data: `grant_type=urn:ibm:params:oauth:grant-type:apikey&apikey=${apiKey}`,
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        timeout: 60000
+      });
+      token = res.data;
+      try {
+        await fs.outputJson(tokenCacheFile, token);
+        objectPath.set(this.s3TokenCache, [apiKeyHash], token);
+      } catch (fe) {
+        return Promise.reject(`failed to cache s3Token to disk at path ${tokenCacheFile}`, fe);
+      }
+      return token;
+    } catch (err) {
+      const error = Buffer.isBuffer(err) ? err.toString('utf8') : err;
+      return Promise.reject(error.toJSON());
+    }
   }
 
   async _getSecretData(name, key, ns) {

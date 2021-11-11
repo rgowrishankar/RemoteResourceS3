@@ -1,7 +1,11 @@
-# RemoteResourceS3
+# This repo will be deprecated and unsupported starting February 2022
+
+Please move to using [RemoteResource](https://github.com/razee-io/RemoteResource)
+which now supports all capabilities of RemoteResourceS3
+
+## RemoteResourceS3
 
 [![Build Status](https://travis-ci.com/razee-io/RemoteResourceS3.svg?branch=master)](https://travis-ci.com/razee-io/RemoteResourceS3)
-[![Dependabot Status](https://api.dependabot.com/badges/status?host=github&repo=razee-io/RemoteResourceS3)](https://dependabot.com)
 ![GitHub](https://img.shields.io/github/license/razee-io/RemoteResourceS3.svg?color=success)
 
 RemoteResourceS3 is a variant of RemoteResource. RemoteResource is the foundation

@@ -16,7 +16,6 @@
 
 const objectPath = require('object-path');
 const request = require('request-promise-native');
-const fs = require('fs-extra');
 const hash = require('object-hash');
 const axios = require('axios');
 const merge = require('deepmerge');
@@ -231,14 +230,9 @@ module.exports = class RemoteResourceS3Controller extends BaseDownloadController
     }
     const apiKeyHash = hash(apiKey, { algorithm: 'shake256' });
     let tokenCacheFile = `./download-cache/s3token-cache/${apiKeyHash}.json`;
-    if (token === undefined && await fs.pathExists(tokenCacheFile)) {
+    if (token === undefined && objectPath.has(this.s3TokenCache, [apiKeyHash])) {
       // fetch cached token
-      if (objectPath.has(this.s3TokenCache, [apiKeyHash])) {
-        token = objectPath.get(this.s3TokenCache, [apiKeyHash]);
-      } else if (await fs.pathExists(tokenCacheFile)) {
-        token = await fs.readJson(tokenCacheFile);
-        objectPath.set(this.s3TokenCache, [apiKeyHash], token);
-      }
+      token = objectPath.get(this.s3TokenCache, [apiKeyHash]);
     }
     if (token !== undefined) {
       const expires = objectPath.get(token, 'expiration', 0); // expiration: time since epoch in seconds
@@ -264,7 +258,6 @@ module.exports = class RemoteResourceS3Controller extends BaseDownloadController
       });
       token = res.data;
       try {
-        await fs.outputJson(tokenCacheFile, token);
         objectPath.set(this.s3TokenCache, [apiKeyHash], token);
       } catch (fe) {
         return Promise.reject(`failed to cache s3Token to disk at path ${tokenCacheFile}`, fe);

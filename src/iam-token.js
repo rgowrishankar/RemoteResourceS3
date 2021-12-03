@@ -18,13 +18,11 @@ const axios = require('axios');
 const objectPath = require('object-path');
 const hash = require('object-hash');
 
-let waitingForToken = new Map()
 
 module.exports = class IamTokenGetter {
   constructor() {
-      this.s3TokenCache = {}
-      this.log = require('./bunyan-api').createLogger('IamTokenGetter');
-
+    this.s3TokenCache = {};
+    this.log = require('./bunyan-api').createLogger('IamTokenGetter');
   }
   async fetchS3Token(iam, kubeResourceMeta, namespace) {
     let apiKey;
@@ -86,10 +84,10 @@ module.exports = class IamTokenGetter {
         // we are going to cache this promise into the s3TokenCache and
         // wait for it.
         let tokenFunction = async (iam, apiKeyHash, apiKey) => {
-            ret = await this._getToken(iam, apiKeyHash, apiKey);
+            let ret = await this._getToken(iam, apiKeyHash, apiKey);
             return ret;
         };
-        token = tokenFunction(iam, apiKeyHash, apiKey)
+        token = tokenFunction(iam, apiKeyHash, apiKey);
         objectPath.set(this.s3TokenCache, [apiKeyHash], token);
       }
     }
@@ -97,21 +95,20 @@ module.exports = class IamTokenGetter {
     // at this point token is either data, or Promise (either created in the else case above
     // or already created by a different event)
     if (token instanceof Promise) {
-        // if the token is a Promise, wait for it to be completed. Once completed, get
-        // the data from the cache and return it.
-        try {
-          await token
-          return objectPath.get(this.s3TokenCache, [apiKeyHash]);
-        } catch(error) {
-            Promise.reject(`failed to get the new token:`, error);
-
-        }
+      // if the token is a Promise, wait for it to be completed. Once completed, get
+      // the data from the cache and return it.
+      try {
+        await token;
+        return objectPath.get(this.s3TokenCache, [apiKeyHash]);
+      } catch(error) {
+          Promise.reject(`failed to get the new token:`, error);
+      }
     } else if (token === undefined) {
-        Promise.reject(`Something went wrong in trying to get the iam token. This code path should never get triggered`)
+        Promise.reject(`Something went wrong in trying to get the iam token. This code path should never get triggered`);
     } else {
         // assume that it is a token
         objectPath.set(this.s3TokenCache, [apiKeyHash], token);
-        return token
+        return token;
     }
   }
 

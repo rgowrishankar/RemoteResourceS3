@@ -19,7 +19,7 @@ const objectPath = require('object-path');
 const hash = require('object-hash');
 const sleep = require('sleep-promise');
 
-let waitingForToken = false
+let waitingForToken = new Map()
 
 module.exports = class IamTokenGetter {
   constructor() {
@@ -77,9 +77,9 @@ module.exports = class IamTokenGetter {
       }
     }
 
-    if (waitingForToken === true) {
+    if (waitingForToken.has(apiKeyHash) === true && waitingForToken.get(apiKeyHash) === true) {
       this.log.info(`MASCD waiting for different event to get a token`);
-      while (waitingForToken === true) {
+        while (waitingForToken.get(apiKeyHash) === true) {
         this.log.info(`MASCD going to sleep`);
         await sleep(2000);
         this.log.info(`MASCD done with sleep`);
@@ -95,8 +95,8 @@ module.exports = class IamTokenGetter {
       }
 
     } else {
-        this.log.info(`MASCD going to get the new token, setting waiting for token to true`)
-        waitingForToken = true
+        this.log.info(`MASCD going to get the new token, setting waiting for token to true`);
+        waitingForToken.set(apiKeyHash, true);
     }
 
     try {
@@ -117,14 +117,14 @@ module.exports = class IamTokenGetter {
       try {
         objectPath.set(this.s3TokenCache, [apiKeyHash], token);
       } catch (fe) {
-        waitingForToken = false;
+        waitingForToken.set(apiKeyHash, false);
         return Promise.reject(`failed to cache s3Token to disk at path ${tokenCacheFile}`, fe);
       }
-      waitingForToken = false;
+        waitingForToken.set(apiKeyHash, false);
       this.log.info(`MASCD returning new token`);
       return token;
     } catch (err) {
-      waitingForToken = false;
+      waitingForToken.set(apiKeyHash, false);
       const error = Buffer.isBuffer(err) ? err.toString('utf8') : err;
       return Promise.reject(error.toJSON());
     }

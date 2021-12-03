@@ -26,6 +26,10 @@ const loggerFactory = require('./bunyan-api');
 const { BaseDownloadController } = require('@razee/razeedeploy-core');
 const IamTokenGetter = require('./iam-token');
 
+// we need to create only one instance of IamTokenGetter, so we are creating
+// it here and not within the Download function. If we create it in the Download
+// function we will end up creating a new IamTokenGetter for each event and
+// call IAM multiple times to get token instead of just once per expiry interval
 let iamTokenGetter = new IamTokenGetter()
 
 

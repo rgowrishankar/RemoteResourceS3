@@ -75,21 +75,22 @@ module.exports = class IamTokenGetter {
         if (Date.now() < (expires - 120) * 1000) {
           return token;
         }
-      } else {
-        // if we get to this point the token is either undefined or it is stale data.
-        // either ways we need to connect to iam auth and get a new token
-        // create an async function that will wait for _getToken to return a token.
-        // since we are not using await, the control will return immediately and the
-        // return value of the tokenFunction is going to be a promise.
-        // we are going to cache this promise into the s3TokenCache and
-        // wait for it.
-        let tokenFunction = async (iam, apiKeyHash, apiKey) => {
-          let ret = await this._getToken(iam, apiKeyHash, apiKey);
-          return ret;
-        };
-        token = tokenFunction(iam, apiKeyHash, apiKey);
-        objectPath.set(this.s3TokenCache, [apiKeyHash], token);
       }
+
+      // if we get to this point the token is either undefined or it is stale data.
+      // either ways we need to connect to iam auth and get a new token
+      // create an async function that will wait for _getToken to return a token.
+      // since we are not using await, the control will return immediately and the
+      // return value of the tokenFunction is going to be a promise.
+      // we are going to cache this promise into the s3TokenCache and
+      // wait for it.
+      let tokenFunction = async (iam, apiKeyHash, apiKey) => {
+        let ret = await this._getToken(iam, apiKeyHash, apiKey);
+        return ret;
+      };
+      token = tokenFunction(iam, apiKeyHash, apiKey);
+      objectPath.set(this.s3TokenCache, [apiKeyHash], token);
+
     }
 
     // at this point token is either data, or Promise (either created in the else case above

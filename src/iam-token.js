@@ -18,7 +18,6 @@ const axios = require('axios');
 const objectPath = require('object-path');
 const hash = require('object-hash');
 const sleep = require('sleep-promise');
-const fs = require('fs-extra')
 
 let waitingForToken = new Map()
 
@@ -28,7 +27,7 @@ module.exports = class IamTokenGetter {
       this.log = require('./bunyan-api').createLogger('IamTokenGetter');
 
   }
-    async fetchS3Token(iam, kubeResourceMeta, namespace) {
+  async fetchS3Token(iam, kubeResourceMeta, namespace) {
     let apiKey;
     let apiKeyAlpha1 = objectPath.get(iam, 'api_key');
     let apiKeyStr = objectPath.get(iam, 'apiKey');
@@ -61,53 +60,56 @@ module.exports = class IamTokenGetter {
   async _requestToken(iam, apiKey) {
     let token;
 
-    console.log(`MASCD entering _requestToken`)
-
     const apiKeyHash = hash(apiKey, { algorithm: 'shake256' });
-    if (token === undefined && objectPath.has(this.s3TokenCache, [apiKeyHash])) {
+    // Check if the cache has the token. If it does have it, copy it into token
+    // for further processing
+    if (objectPath.has(this.s3TokenCache, [apiKeyHash])) {
       // fetch cached token
-        token = objectPath.get(this.s3TokenCache, [apiKeyHash]);
-        this.log.info(`MASCD got the cached token`);
-    } else {
-        console.log(`MASCD no cached token need to get new token`)
+      token = objectPath.get(this.s3TokenCache, [apiKeyHash]);
     }
 
-    if (token !== undefined && !(token instanceof Promise)) {
-      this.log.info(`MASCD token is not undefined and not a promise, `)
-      const expires = objectPath.get(token, 'expiration', 0); // expiration: time since epoch in seconds
-      // re-use cached token as long as we are more than 2 minutes away from expiring.
-      if (Date.now() < (expires - 120) * 1000) {
-        this.log.info(`MASCD cached token has not expired, returning it`);
-        return token;
+    // if we are able to fetch the token from the cache and it is not a Promise,
+    // then we need to check the expiry. If it is not expiring in the next 120 s
+    // return the token
+    if (!(token instanceof Promise)) {
+      if (token !== undefined) {
+        const expires = objectPath.get(token, 'expiration', 0); // expiration: time since epoch in seconds
+        // re-use cached token as long as we are more than 2 minutes away from expiring.
+        if (Date.now() < (expires - 120) * 1000) {
+          return token;
+        }
       } else {
-        this.log.info(`MASCD cached token expired getting new one`);
-      }
-    } else if (token === undefined) {
-        this.log.info(`MASCD token is undefined, setting it to async promise argh`)
-        let tokenFunction = async (iam, apiKeyHash, apiKey) => { this.log.info(`MASCD within the async fn`); ret = await this._getToken(iam, apiKeyHash, apiKey); return ret;};
-        this.log.info(`MASCD going to call the token function`)
+        // if we get to this point the token is either undefined or it is stale data.
+        // either ways we need to connect to iam auth and get a new token
+        // create an async function that will wait for _getToken to return a token.
+        // since we are not using await, the control will return immediately and the
+        // return value of the tokenFunction is going to be a promise.
+        // we are going to cache this promise into the s3TokenCache and
+        // wait for it.
+        let tokenFunction = async (iam, apiKeyHash, apiKey) => {
+            ret = await this._getToken(iam, apiKeyHash, apiKey);
+            return ret;
+        };
         token = tokenFunction(iam, apiKeyHash, apiKey)
-        this.log.info(`MASCD called the token function`)
         objectPath.set(this.s3TokenCache, [apiKeyHash], token);
-        this.log.info(`MASCD type of token ${typeof(token)}`)
+      }
     }
 
+    // at this point token is either data, or Promise (either created in the else case above
+    // or already created by a different event)
     if (token instanceof Promise) {
-        this.log.info(`MASCD type of token is promise, going to try to wait for it`)
+        // if the token is a Promise, wait for it to be completed. Once completed, get
+        // the data from the cache and return it.
         try {
           await token
-          this.log.info(`MASCD done waiting for token, returning token cache ${token} ${objectPath.get(this.s3TokenCache, [apiKeyHash])}`)
           return objectPath.get(this.s3TokenCache, [apiKeyHash]);
         } catch(error) {
             Promise.reject(`failed to get the new token:`, error);
         }
     } else if (token === undefined) {
-        this.log.info(`MASCD token is not Promise and is undefined. why? going to await on getToken`)
-        token = await this._getToken(iam, apiKeyHash)
-        objectPath.set(this.s3TokenCache, [apiKeyHash], token)
-        return token
+        Promise.reject(`Something went wrong in trying to get the iam token. This code path should never get triggered`)
     } else {
-        this.log.info(`MASCD end of function, returning token`)
+        // assume that it is a token
         objectPath.set(this.s3TokenCache, [apiKeyHash], token);
         return token
     }
@@ -130,14 +132,10 @@ module.exports = class IamTokenGetter {
       });
       let token = res.data;
       objectPath.set(this.s3TokenCache, [apiKeyHash], token);
-      let tokenCacheFile = `./download-cache/s3token-cache/${apiKeyHash}.json`;
-      fs.outputJsonSync(tokenCacheFile, token);
-
-      this.log.info(`MASCD returning new token in _getToken`);
+      this.log.info(`Got a new token from IAM, setting it in the local cache`);
       return token;
     } catch (err) {
       const error = Buffer.isBuffer(err) ? err.toString('utf8') : err;
-      this.log.info(`error in getting iam ${error}`)
       return Promise.reject(error);
     }
 

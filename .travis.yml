@@ -6,7 +6,7 @@ services:
   - docker
 
 before_install:
-  - echo "$DOCKERHUB_TOKEN" | docker login -u "icdevops" --password-stdin
+  - if [[ -n $DOCKERHUB_TOKEN ]]; then echo "$DOCKERHUB_TOKEN" | docker login -u "icdevops" --password-stdin; fi
 
 env:
   global:
@@ -28,10 +28,10 @@ jobs:
        - if [ -n "${TRAVIS_TAG}" ]; then docker tag quay.io/razee/remoteresources3:${TRAVIS_COMMIT}-amd64 quay.io/razee/remoteresources3:${TRAVIS_TAG}-amd64; fi
        - docker images
        - ./build/process-template.sh kubernetes/RemoteResourceS3/resource.yaml >/tmp/resource.yaml
- 
+
      before_deploy:
        - docker login -u="${QUAY_ID}" -p="${QUAY_TOKEN}" quay.io
-       
+
      deploy:
        # Deploy alpha builds
        - provider: script
@@ -47,7 +47,7 @@ jobs:
          on:
            tags: true
            condition: ${TRAVIS_TAG} =~ ^[0-9]+\.[0-9]+\.[0-9]+$
-           
+
    - name: building ppc64le image
      arch: ppc64le
      script:
@@ -59,10 +59,10 @@ jobs:
        - if [ -n "${TRAVIS_TAG}" ]; then docker tag quay.io/razee/remoteresources3:${TRAVIS_COMMIT}-ppc64le quay.io/razee/remoteresources3:${TRAVIS_TAG}-ppc64le; fi
        - docker images
        - ./build/process-template.sh kubernetes/RemoteResourceS3/resource.yaml >/tmp/resource.yaml
-       
+
      before_deploy:
        - docker login -u="${QUAY_ID}" -p="${QUAY_TOKEN}" quay.io
-       
+
      deploy:
        # Deploy alpha builds
        - provider: script
@@ -91,10 +91,10 @@ jobs:
        - if [ -n "${TRAVIS_TAG}" ]; then docker tag quay.io/razee/remoteresources3:${TRAVIS_COMMIT}-s390x quay.io/razee/remoteresources3:${TRAVIS_TAG}-s390x; fi
        - docker images
        - ./build/process-template.sh kubernetes/RemoteResourceS3/resource.yaml >/tmp/resource.yaml
-       
+
      before_deploy:
        - docker login -u="${QUAY_ID}" -p="${QUAY_TOKEN}" quay.io
-       
+
      deploy:
        # Deploy alpha builds
        - provider: script
@@ -117,19 +117,19 @@ jobs:
      script:
        - if [[ $TRAVIS_TAG =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then npm version --no-git-tag-version "${TRAVIS_TAG}"; fi
        - ./build/process-template.sh kubernetes/RemoteResourceS3/resource.yaml >/tmp/resource.yaml
-       - export DOCKER_CLI_EXPERIMENTAL=enabled 
-       - sudo chown -R $USER:$USER /etc/docker/ 
+       - export DOCKER_CLI_EXPERIMENTAL=enabled
+       - sudo chown -R $USER:$USER /etc/docker/
        - |
          if [ -n "${TRAVIS_TAG}" ]; then
             docker manifest create quay.io/razee/remoteresources3:${TRAVIS_TAG} \
               quay.io/razee/remoteresources3:${TRAVIS_TAG}-amd64 \
               quay.io/razee/remoteresources3:${TRAVIS_TAG}-ppc64le \
-              quay.io/razee/remoteresources3:${TRAVIS_TAG}-s390x 
+              quay.io/razee/remoteresources3:${TRAVIS_TAG}-s390x
          fi
-      
+
      before_deploy:
        - docker login -u="${QUAY_ID}" -p="${QUAY_TOKEN}" quay.io
-       
+
      deploy:
        # Deploy alpha builds
        - provider: script

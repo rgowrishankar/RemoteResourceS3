@@ -28,9 +28,9 @@ module.exports = class IamTokenGetter {
   }
   async fetchS3Token(iam, kubeResourceMeta, namespace) {
     let apiKey;
-    let apiKeyAlpha1 = objectPath.get(iam, 'api_key');
-    let apiKeyStr = objectPath.get(iam, 'apiKey');
-    let apiKeyRef = objectPath.get(iam, 'apiKeyRef');
+    const apiKeyAlpha1 = objectPath.get(iam, 'api_key');
+    const apiKeyStr = objectPath.get(iam, 'apiKey');
+    const apiKeyRef = objectPath.get(iam, 'apiKeyRef');
 
     if (typeof apiKeyAlpha1 == 'string') {
       apiKey = apiKeyAlpha1;
@@ -104,6 +104,7 @@ module.exports = class IamTokenGetter {
           return objectPath.get(this.s3TokenCache, [apiKeyHash]);
         } catch(error) {
             Promise.reject(`failed to get the new token:`, error);
+
         }
     } else if (token === undefined) {
         Promise.reject(`Something went wrong in trying to get the iam token. This code path should never get triggered`)

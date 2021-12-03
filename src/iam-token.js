@@ -117,12 +117,14 @@ module.exports = class IamTokenGetter {
       try {
         objectPath.set(this.s3TokenCache, [apiKeyHash], token);
       } catch (fe) {
+        waitingForToken = false;
         return Promise.reject(`failed to cache s3Token to disk at path ${tokenCacheFile}`, fe);
       }
       waitingForToken = false;
       this.log.info(`MASCD returning new token`);
       return token;
     } catch (err) {
+      waitingForToken = false;
       const error = Buffer.isBuffer(err) ? err.toString('utf8') : err;
       return Promise.reject(error.toJSON());
     }

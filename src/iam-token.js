@@ -38,12 +38,12 @@ module.exports = class IamTokenGetter {
       let secretName = objectPath.get(apiKeyAlpha1, 'valueFrom.secretKeyRef.name');
       let secretNamespace = objectPath.get(apiKeyAlpha1, 'valueFrom.secretKeyRef.namespace', namespace);
       let secretKey = objectPath.get(apiKeyAlpha1, 'valueFrom.secretKeyRef.key');
-        apiKey = await this._getSecretData(secretName, secretKey, secretNamespace, kubeResourceMeta, namespace);
+      apiKey = await this._getSecretData(secretName, secretKey, secretNamespace, kubeResourceMeta, namespace);
     } else if (typeof apiKeyRef == 'object') {
       let secretName = objectPath.get(apiKeyRef, 'valueFrom.secretKeyRef.name');
       let secretNamespace = objectPath.get(apiKeyRef, 'valueFrom.secretKeyRef.namespace', namespace);
       let secretKey = objectPath.get(apiKeyRef, 'valueFrom.secretKeyRef.key');
-        apiKey = await this._getSecretData(secretName, secretKey, secretNamespace, kubeResourceMeta, namespace);
+      apiKey = await this._getSecretData(secretName, secretKey, secretNamespace, kubeResourceMeta, namespace);
     }
     if (!apiKey) {
       return Promise.reject('Failed to find valid apikey to authenticate against iam');
@@ -84,8 +84,8 @@ module.exports = class IamTokenGetter {
         // we are going to cache this promise into the s3TokenCache and
         // wait for it.
         let tokenFunction = async (iam, apiKeyHash, apiKey) => {
-            let ret = await this._getToken(iam, apiKeyHash, apiKey);
-            return ret;
+          let ret = await this._getToken(iam, apiKeyHash, apiKey);
+          return ret;
         };
         token = tokenFunction(iam, apiKeyHash, apiKey);
         objectPath.set(this.s3TokenCache, [apiKeyHash], token);
@@ -101,14 +101,14 @@ module.exports = class IamTokenGetter {
         await token;
         return objectPath.get(this.s3TokenCache, [apiKeyHash]);
       } catch(error) {
-          Promise.reject(`failed to get the new token:`, error);
+        Promise.reject('failed to get the new token:', error);
       }
     } else if (token === undefined) {
-        Promise.reject(`Something went wrong in trying to get the iam token. This code path should never get triggered`);
+      Promise.reject('Something went wrong in trying to get the iam token. This code path should never get triggered');
     } else {
-        // assume that it is a token
-        objectPath.set(this.s3TokenCache, [apiKeyHash], token);
-        return token;
+      // assume that it is a token
+      objectPath.set(this.s3TokenCache, [apiKeyHash], token);
+      return token;
     }
   }
 
@@ -129,7 +129,7 @@ module.exports = class IamTokenGetter {
       });
       let token = res.data;
       objectPath.set(this.s3TokenCache, [apiKeyHash], token);
-      this.log.info(`Got a new token from IAM, setting it in the local cache`);
+      this.log.info('Got a new token from IAM, setting it in the local cache');
       return token;
     } catch (err) {
       const error = Buffer.isBuffer(err) ? err.toString('utf8') : err;

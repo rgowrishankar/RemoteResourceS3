@@ -16,7 +16,7 @@
 
 const objectPath = require('object-path');
 const request = require('request-promise-native');
-const fs = require('fs-extra');
+const merge = require('deepmerge');
 const xml2js = require('xml2js');
 const clone = require('clone');
 const loggerFactory = require('./bunyan-api');

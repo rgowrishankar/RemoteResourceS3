@@ -24,6 +24,9 @@ const xml2js = require('xml2js');
 const clone = require('clone');
 const loggerFactory = require('./bunyan-api');
 const { BaseDownloadController } = require('@razee/razeedeploy-core');
+const IamTokenGetter = require('./iam-token');
+
+let iamTokenGetter = new IamTokenGetter()
 
 
 module.exports = class RemoteResourceS3Controller extends BaseDownloadController {
@@ -61,7 +64,8 @@ module.exports = class RemoteResourceS3Controller extends BaseDownloadController
       objectPath.set(options, 'aws.key', accessKeyId);
       objectPath.set(options, 'aws.secret', secretAccessKey);
     } else if (iam) {
-      let bearerToken = await this._fetchS3Token(iam);
+      // let bearerToken = await this._fetchS3Token(iam);
+      let bearerToken = iamTokenGetter.fetchS3Token(iam, this.kubeResourceMeta, this.namespace);
       objectPath.set(options, 'headers.Authorization', `bearer ${bearerToken}`);
     }
     let opt = merge(reqOpt, options);

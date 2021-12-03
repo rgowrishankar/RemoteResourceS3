@@ -102,7 +102,7 @@ module.exports = class IamTokenGetter {
         await token;
         return objectPath.get(this.s3TokenCache, [apiKeyHash]);
       } catch(error) {
-        Promise.reject('failed to get the new token:', error);
+        return Promise.reject('failed to get the new token:', error);
       }
     } else if (token === undefined) {
       Promise.reject('Something went wrong in trying to get the iam token. This code path should never get triggered');

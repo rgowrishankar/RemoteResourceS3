@@ -17,7 +17,6 @@
 const axios = require('axios');
 const objectPath = require('object-path');
 const hash = require('object-hash');
-const sleep = require('sleep-promise');
 
 let waitingForToken = new Map()
 

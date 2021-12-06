@@ -27,7 +27,7 @@ const IamTokenGetter = require('./iam-token');
 // it here and not within the Download function. If we create it in the Download
 // function we will end up creating a new IamTokenGetter for each event and
 // call IAM multiple times to get token instead of just once per expiry interval
-let iamTokenGetter = new IamTokenGetter();
+const iamTokenGetter = new IamTokenGetter();
 
 
 module.exports = class RemoteResourceS3Controller extends BaseDownloadController {

@@ -35,14 +35,14 @@ module.exports = class IamTokenGetter {
     } else if (typeof apiKeyStr == 'string') {
       apiKey = apiKeyStr;
     } else if (typeof apiKeyAlpha1 == 'object') {
-      let secretName = objectPath.get(apiKeyAlpha1, 'valueFrom.secretKeyRef.name');
-      let secretNamespace = objectPath.get(apiKeyAlpha1, 'valueFrom.secretKeyRef.namespace', namespace);
-      let secretKey = objectPath.get(apiKeyAlpha1, 'valueFrom.secretKeyRef.key');
+      const secretName = objectPath.get(apiKeyAlpha1, 'valueFrom.secretKeyRef.name');
+      const secretNamespace = objectPath.get(apiKeyAlpha1, 'valueFrom.secretKeyRef.namespace', namespace);
+      const secretKey = objectPath.get(apiKeyAlpha1, 'valueFrom.secretKeyRef.key');
       apiKey = await this._getSecretData(secretName, secretKey, secretNamespace, kubeResourceMeta, namespace);
     } else if (typeof apiKeyRef == 'object') {
-      let secretName = objectPath.get(apiKeyRef, 'valueFrom.secretKeyRef.name');
-      let secretNamespace = objectPath.get(apiKeyRef, 'valueFrom.secretKeyRef.namespace', namespace);
-      let secretKey = objectPath.get(apiKeyRef, 'valueFrom.secretKeyRef.key');
+      const secretName = objectPath.get(apiKeyRef, 'valueFrom.secretKeyRef.name');
+      const secretNamespace = objectPath.get(apiKeyRef, 'valueFrom.secretKeyRef.namespace', namespace);
+      const secretKey = objectPath.get(apiKeyRef, 'valueFrom.secretKeyRef.key');
       apiKey = await this._getSecretData(secretName, secretKey, secretNamespace, kubeResourceMeta, namespace);
     }
     if (!apiKey) {
@@ -74,6 +74,8 @@ module.exports = class IamTokenGetter {
         // re-use cached token as long as we are more than 2 minutes away from expiring.
         if (Date.now() < (expires - 120) * 1000) {
           return token;
+        } else {
+            this.log.info(`IAM token is about to expire ${expires}`)
         }
       }
 
@@ -84,13 +86,13 @@ module.exports = class IamTokenGetter {
       // return value of the tokenFunction is going to be a promise.
       // we are going to cache this promise into the s3TokenCache and
       // wait for it.
-      let tokenFunction = async (iam, apiKeyHash, apiKey) => {
-        let ret = await this._getToken(iam, apiKeyHash, apiKey);
-        return ret;
-      };
-      token = tokenFunction(iam, apiKeyHash, apiKey);
-      objectPath.set(this.s3TokenCache, [apiKeyHash], token);
-
+      try {
+        token = this._getToken(iam, apiKeyHash, apiKey);
+        objectPath.set(this.s3TokenCache, [apiKeyHash], token);
+      } catch (error) {
+          objectPath.del(this.s3TokenCache, [apiKeyHash]); // Clear cache for future retry.
+          return Promise.reject(error)
+      }
     }
 
     // at this point token is either data, or Promise (either created in the else case above
@@ -99,23 +101,25 @@ module.exports = class IamTokenGetter {
       // if the token is a Promise, wait for it to be completed. Once completed, get
       // the data from the cache and return it.
       try {
-        await token;
-        return objectPath.get(this.s3TokenCache, [apiKeyHash]);
+        token = await token;
+        objectPath.set(this.s3TokenCache, [apiKeyHash], token);
+        return token
       } catch(error) {
+        objectPath.del(this.s3TokenCache, [apiKeyHash]); // Clear cache for future retry.
         return Promise.reject('failed to get the new token:', error);
       }
     } else if (token === undefined) {
+      objectPath.del(this.s3TokenCache, [apiKeyHash]); // Clear cache for future retry.
       Promise.reject('Something went wrong in trying to get the iam token. This code path should never get triggered');
     } else {
       // assume that it is a token
-      objectPath.set(this.s3TokenCache, [apiKeyHash], token);
       return token;
     }
   }
 
   async _getToken(iam, apiKeyHash, apiKey) {
     try {
-      let res = await axios({
+      const res = await axios({
         method: 'post',
         url: iam.url, // 'https://iam.cloud.ibm.com/identity/token',
         params: {
@@ -129,19 +133,19 @@ module.exports = class IamTokenGetter {
         timeout: 60000
       });
       let token = res.data;
-      objectPath.set(this.s3TokenCache, [apiKeyHash], token);
       this.log.info('Got a new token from IAM, setting it in the local cache');
       return token;
     } catch (err) {
       const error = Buffer.isBuffer(err) ? err.toString('utf8') : err;
+      objectPath.del(this.s3TokenCache, [apiKeyHash]); // Clear cache for future retry.
       return Promise.reject(error);
     }
 
   }
 
   async _getSecretData(name, key, ns, kubeResourceMeta, namespace) {
-    let res = await kubeResourceMeta.request({ uri: `/api/v1/namespaces/${ns || namespace}/secrets/${name}`, json: true });
-    let apiKey = Buffer.from(objectPath.get(res, ['data', key], ''), 'base64').toString();
+    const res = await kubeResourceMeta.request({ uri: `/api/v1/namespaces/${ns || namespace}/secrets/${name}`, json: true });
+    const apiKey = Buffer.from(objectPath.get(res, ['data', key], ''), 'base64').toString();
     return apiKey;
   }
 };

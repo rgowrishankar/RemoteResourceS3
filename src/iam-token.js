@@ -75,7 +75,7 @@ module.exports = class IamTokenGetter {
         if (Date.now() < (expires - 120) * 1000) {
           return token;
         } else {
-            this.log.info(`IAM token is about to expire ${expires}`)
+          this.log.info(`IAM token is about to expire ${expires}`);
         }
       }
 
@@ -90,8 +90,8 @@ module.exports = class IamTokenGetter {
         token = this._getToken(iam, apiKeyHash, apiKey);
         objectPath.set(this.s3TokenCache, [apiKeyHash], token);
       } catch (error) {
-          objectPath.del(this.s3TokenCache, [apiKeyHash]); // Clear cache for future retry.
-          return Promise.reject(error)
+        objectPath.del(this.s3TokenCache, [apiKeyHash]); // Clear cache for future retry.
+        return Promise.reject(error);
       }
     }
 
@@ -103,7 +103,7 @@ module.exports = class IamTokenGetter {
       try {
         token = await token;
         objectPath.set(this.s3TokenCache, [apiKeyHash], token);
-        return token
+        return token;
       } catch(error) {
         objectPath.del(this.s3TokenCache, [apiKeyHash]); // Clear cache for future retry.
         return Promise.reject('failed to get the new token:', error);

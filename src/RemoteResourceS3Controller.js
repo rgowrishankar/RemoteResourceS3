@@ -65,7 +65,7 @@ module.exports = class RemoteResourceS3Controller extends BaseDownloadController
       objectPath.set(options, 'aws.key', accessKeyId);
       objectPath.set(options, 'aws.secret', secretAccessKey);
     } else if (iam) {
-      let bearerToken = await iamTokenGetter.fetchS3Token(iam, this.kubeResourceMeta, this.namespace);
+      const bearerToken = await iamTokenGetter.fetchS3Token(iam, this.kubeResourceMeta, this.namespace);
       objectPath.set(options, 'headers.Authorization', `bearer ${bearerToken}`);
     }
     let opt = merge(reqOpt, options);

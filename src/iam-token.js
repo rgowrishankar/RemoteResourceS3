@@ -105,12 +105,11 @@ module.exports = class IamTokenGetter {
         objectPath.set(this.s3TokenCache, [apiKeyHash], token);
         return token;
       } catch(error) {
-        objectPath.del(this.s3TokenCache, [apiKeyHash]); // Clear cache for future retry.
         return Promise.reject('failed to get the new token:', error);
       }
     } else if (token === undefined) {
       objectPath.del(this.s3TokenCache, [apiKeyHash]); // Clear cache for future retry.
-      Promise.reject('Something went wrong in trying to get the iam token. This code path should never get triggered');
+      return Promise.reject('Something went wrong in trying to get the iam token. This code path should never get triggered');
     } else {
       // assume that it is a token
       return token;
